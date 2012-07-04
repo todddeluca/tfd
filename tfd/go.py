@@ -7,11 +7,11 @@ ftp://ftp.geneontology.org/pub/go/godatabase/archive/README
 
 Example usage:
 
-download()
-process()
 import pandas
-print pandas.DataFrame(list(term_table_dicts(".", guess_latest_release())))[:5]
-
+import tfd.go
+install_dir = tfd.go.install_in_dir()
+go = tfd.go.GeneOntology(install_dir)
+print pandas.DataFrame(list(go.term_table_dicts()))[:5]
 
 '''
 
@@ -30,6 +30,9 @@ def guess_latest_release(today=None):
     day of the previous month.  
     
     Return the release as an iso format string, YYYY-MM-DD.  E.g. '2012-06-01'.
+
+    today: Used for testing that the return value really is the first of the
+    previous month, even when "today" is in January.
     '''
     if today is None:
         today = datetime.date.today()
@@ -40,13 +43,67 @@ def guess_latest_release(today=None):
     return release.isoformat()
 
 
+def install_in_dir(root=None, release=None):
+    '''
+    Download and unpack a Gene Ontology termdb release under a local dir.
+
+    root: a directory in which to install the termdb tables release.  Defaults
+    to the current directory.
+    release: the specific release to download and install, as a iso formatted
+    date string.  E.g. '2012-06-01'.  Defaults to one of the more recent
+    releases.
+
+    return: the directory in which the release was installed.  This should be
+    a dir under root named after the release, e.g.
+    '/path/to/root/go_201206-termdb-tables'
+    This dir is useful for creating a GeneOntology object.
+    '''
+    root = os.path.abspath(root) if root is not None else os.getcwd()
+    release = release or guess_latest_release()
+    url = term_tables_url(release)
+    destbase = term_tables_basename(release)
+    dest = os.path.join(root, destbase) # download to here
+
+    # download to /path/to/root/go_201206-termdb-tables.tar.gz
+    if not os.path.exists(root):
+        os.makedirs(root, DIR_MODE)
+    print 'downloading {} to {}...'.format(url, dest)
+    cmd = ['curl', '--remote-time', '--output', dest, url]
+    subprocess.check_call(cmd)
+
+    # untar to /path/to/root/go_201206-termdb-tables
+    print 'processing tarball', dest
+    print '...tar xzf file'
+    subprocess.check_call(['tar', '-xzf', destbase],
+                            cwd=root)
+
+    print 'removing tarball', dest
+    os.remove(dest)
+
+    # return /path/to/root/go_201206-termdb-tables
+    return term_tables_dir(root, release)
+
+
+def term_tables_dir(root=None, release=None):
+    '''
+    Return the directory in which the release should be installed under root.
+    This is useful for getting the dir for creating a GeneOntology object.
+    e.g. '/path/to/root/go_201206-termdb-tables'
+    '''
+    root = os.path.abspath(root) if root is not None else os.getcwd()
+    release = release or guess_latest_release()
+    tarfile = term_tables_file(root, release)
+    return tarfile[:-7] # remove '.tar.gz'
+
+
 def term_tables_basename(release):
     '''
     e.g. 'go_201206-termdb-tables.tar.gz'
     '''
     year, month, day = release.split('-')
-    ym_release = year + month
-    return 'go_{}-termdb-tables.tar.gz'.format(ym_release)
+    basename = 'go_{}-termdb-tables.tar.gz'.format(year + month)
+    assert basename.endswith('.tar.gz')
+    return basename
 
 
 def term_tables_url(release):
@@ -60,19 +117,75 @@ def term_tables_url(release):
 
 def term_tables_file(root, release):
     '''
-    e.g. './data/geneontology/go_201206-termdb-tables.tar.gz'
+    e.g. '/path/to/root/go_201206-termdb-tables.tar.gz'
     '''
     basename = term_tables_basename(release)
-    return os.path.join(root, 'geneontology', basename)
+    return os.path.join(root, basename)
 
 
-def term_tables_dir(root, release):
+class GeneOntology(object):
     '''
-    e.g. './data/geneontology/go_201206-termdb-tables'
+    An abstraction layer around a filesystem installation of a Gene
+    Ontology release.  This object provides access to the tables in 
+    Gene Ontology.  Well, currently only the term table.
+
+    From the CREATE TABLE statement in the term.sql file we can see that
+    the fields are:
+        `id` int(11) NOT NULL AUTO_INCREMENT,
+        `name` varchar(255) NOT NULL DEFAULT '',
+        `term_type` varchar(55) NOT NULL,
+        `acc` varchar(255) NOT NULL,
+        `is_obsolete` int(11) NOT NULL DEFAULT '0',
+        `is_root` int(11) NOT NULL DEFAULT '0',
+        `is_relation` int(11) NOT NULL DEFAULT '0',
     '''
-    tarfile = term_tables_file(root, release)
-    assert tarfile.endswith('.tar.gz')
-    return tarfile[:-7] # remove '.tar.gz'
+    def __init__(self, release_dir):
+        '''
+        release_dir:  The directory the release is installed in, e.g.
+        '/path/to/root/go_201206-termdb-tables'
+        '''
+        self.release_dir = release_dir
+
+    def _term_table_file(self):
+        '''
+        Return the path to the term.txt file of the release.
+        e.g. '/path/to/root/go_201206-termdb-tables/term.txt'
+        '''
+        return os.path.join(self.release_dir, 'term.txt')
+
+    def term_table_fields(self):
+        '''
+        Return a tuple containing all the field names.
+        '''
+        return ('id', 'name', 'term_type', 'acc', 'is_obsolete', 'is_root',
+                'is_relation')
+
+    def term_table_tuples(self):
+        '''
+        Iterate over the rows of the term table, yielding a tuple of the
+        row values converted to int or str as appropriate.
+        '''
+        field_types = (int, str, str, str, int, int, int)
+        num = len(field_types)
+        with open(self._term_table_file()) as fh:
+            for line in fh:
+                fields = line.strip().split('\t')
+                yield tuple(field_types[i](fields[i]) for i in range(num))
+
+    def term_table_dicts(self):
+        '''
+        Iterate over the rows of the term table, yielding a dict mapping 
+        each field name to the field value for the row, converted to int or
+        str as appropriate.
+        '''
+        field_names = self.term_table_fields()
+        num = len(field_names)
+        for fields in self.term_table_tuples():
+            yield {field_names[i]: fields[i] for i in range(num)}
+
+
+############
+# Deprecated
 
 
 def term_table_file(root, release):
@@ -99,6 +212,7 @@ def download(root='.', release=None):
     print 'downloading {} to {}...'.format(url, dest)
     cmd = ['curl', '--remote-time', '--output', dest, url]
     subprocess.check_call(cmd)
+    return dest
 
 
 def process(root='.', release=None):
@@ -109,69 +223,6 @@ def process(root='.', release=None):
         print '...tar xzf file'
         subprocess.check_call(['tar', '-xzf', os.path.basename(path)],
                               cwd=os.path.dirname(path))
-
-
-def term_table_fields():
-    '''
-    From the CREATE TABLE statement in the term.sql file we can see that the
-    fields are:
-        `id` int(11) NOT NULL AUTO_INCREMENT,
-        `name` varchar(255) NOT NULL DEFAULT '',
-        `term_type` varchar(55) NOT NULL,
-        `acc` varchar(255) NOT NULL,
-        `is_obsolete` int(11) NOT NULL DEFAULT '0',
-        `is_root` int(11) NOT NULL DEFAULT '0',
-        `is_relation` int(11) NOT NULL DEFAULT '0',
-
-    Return a tuple containing all the field names.
-    '''
-    return ('id', 'name', 'term_type', 'acc', 'is_obsolete', 'is_root',
-            'is_relation')
-
-
-def term_table_tuples(root, release):
-    '''
-    From the CREATE TABLE statement in the term.sql file we can see that the
-    fields are:
-        `id` int(11) NOT NULL AUTO_INCREMENT,
-        `name` varchar(255) NOT NULL DEFAULT '',
-        `term_type` varchar(55) NOT NULL,
-        `acc` varchar(255) NOT NULL,
-        `is_obsolete` int(11) NOT NULL DEFAULT '0',
-        `is_root` int(11) NOT NULL DEFAULT '0',
-        `is_relation` int(11) NOT NULL DEFAULT '0',
-
-    Iterate over the rows of the table term.txt, yielding a tuple of the
-    row values converted to int or str as appropriate.
-    '''
-    field_types = (int, str, str, str, int, int, int)
-    num = len(field_types)
-    with open(term_table_file(root, release)) as fh:
-        for line in fh:
-            fields = line.strip().split('\t')
-            yield tuple(field_types[i](fields[i]) for i in range(num))
-
-
-def term_table_dicts(root, release):
-    '''
-    From the CREATE TABLE statement in the term.sql file we can see that the
-    fields are:
-        `id` int(11) NOT NULL AUTO_INCREMENT,
-        `name` varchar(255) NOT NULL DEFAULT '',
-        `term_type` varchar(55) NOT NULL,
-        `acc` varchar(255) NOT NULL,
-        `is_obsolete` int(11) NOT NULL DEFAULT '0',
-        `is_root` int(11) NOT NULL DEFAULT '0',
-        `is_relation` int(11) NOT NULL DEFAULT '0',
-
-    Return a dict for each row in the term.txt file mapping the field
-    name to the field value.  Field values will be converted to int or str as
-    appropriate.
-    '''
-    field_names = term_table_fields()
-    num = len(field_names)
-    for fields in term_table_tuples(root, release):
-        yield {field_names[i]: fields[i] for i in range(num)}
 
 
 
