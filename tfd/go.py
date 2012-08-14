@@ -22,6 +22,11 @@ import subprocess
 
 DIR_MODE = 0775 # directories in this dataset are world readable and group writable.
 
+
+##################################
+# DOWNLOAD / INSTALL GENE ONTOLOGY
+
+
 def guess_latest_release(today=None):
     '''
     Full releases seem to be published sometime in the first or second week
@@ -43,7 +48,7 @@ def guess_latest_release(today=None):
     return release.isoformat()
 
 
-def install_in_dir(root=None, release=None):
+def install_in_dir(root=None, release=None, dataset='termdb'):
     '''
     Download and unpack a Gene Ontology termdb release under a local dir.
 
@@ -52,6 +57,10 @@ def install_in_dir(root=None, release=None):
     release: the specific release to download and install, as a iso formatted
     date string.  E.g. '2012-06-01'.  Defaults to one of the more recent
     releases.
+    dataset: Can be 'termdb' (default), 'assocdb', or 'seqdb'.  termdb defines
+    the go terms.  assocdb contains termdb and defines term-gene product
+    associations.  seqdb contains assocdb and defines the sequences associated
+    with the gene products.
 
     return: the directory in which the release was installed.  This should be
     a dir under root named after the release, e.g.
@@ -60,8 +69,8 @@ def install_in_dir(root=None, release=None):
     '''
     root = os.path.abspath(root) if root is not None else os.getcwd()
     release = release or guess_latest_release()
-    url = term_tables_url(release)
-    destbase = term_tables_basename(release)
+    url = tables_url(release, dataset)
+    destbase = tables_basename(release, dataset)
     dest = os.path.join(root, destbase) # download to here
 
     # download to /path/to/root/go_201206-termdb-tables.tar.gz
@@ -81,47 +90,73 @@ def install_in_dir(root=None, release=None):
     os.remove(dest)
 
     # return /path/to/root/go_201206-termdb-tables
-    return term_tables_dir(root, release)
+    return tables_dir(root, release, dataset)
 
 
-def term_tables_dir(root=None, release=None):
+##########################
+# GENERAL TABLES FUNCTIONS
+
+def tables_dir(root=None, release=None, dataset='termdb'):
     '''
     Return the directory in which the release should be installed under root.
     This is useful for getting the dir for creating a GeneOntology object.
     e.g. '/path/to/root/go_201206-termdb-tables'
+
+    dataset: Can be 'termdb' (default), 'assocdb', or 'seqdb'.  termdb defines
+    the go terms.  assocdb contains termdb and defines term-gene product
+    associations.  seqdb contains assocdb and defines the sequences associated
+    with the gene products.
     '''
     root = os.path.abspath(root) if root is not None else os.getcwd()
     release = release or guess_latest_release()
-    tarfile = term_tables_file(root, release)
+    tarfile = tables_file(root, release, dataset)
     return tarfile[:-7] # remove '.tar.gz'
 
 
-def term_tables_basename(release):
+def tables_basename(release, dataset='termdb'):
     '''
     e.g. 'go_201206-termdb-tables.tar.gz'
+
+    dataset: Can be 'termdb' (default), 'assocdb', or 'seqdb'.  termdb defines
+    the go terms.  assocdb contains termdb and defines term-gene product
+    associations.  seqdb contains assocdb and defines the sequences associated
+    with the gene products.
     '''
     year, month, day = release.split('-')
-    basename = 'go_{}-termdb-tables.tar.gz'.format(year + month)
+    basename = 'go_{}-{}-tables.tar.gz'.format(year + month, dataset)
     assert basename.endswith('.tar.gz')
     return basename
 
 
-def term_tables_url(release):
+def tables_url(release, dataset='termdb'):
     '''
     e.g. 'ftp://ftp.geneontology.org/pub/go/godatabase/archive/full/2012-06-01/go_201206-termdb-tables.tar.gz'
+
+    dataset: Can be 'termdb' (default), 'assocdb', or 'seqdb'.  termdb defines
+    the go terms.  assocdb contains termdb and defines term-gene product
+    associations.  seqdb contains assocdb and defines the sequences associated
+    with the gene products.
     '''
-    basename = term_tables_basename(release)
+    basename = tables_basename(release, dataset)
     url_root = 'ftp://ftp.geneontology.org/pub/go/godatabase/archive'
     return url_root + '/' + 'full/{}/{}'.format(release, basename)
 
 
-def term_tables_file(root, release):
+def tables_file(root, release, dataset='termdb'):
     '''
     e.g. '/path/to/root/go_201206-termdb-tables.tar.gz'
+
+    dataset: Can be 'termdb' (default), 'assocdb', or 'seqdb'.  termdb defines
+    the go terms.  assocdb contains termdb and defines term-gene product
+    associations.  seqdb contains assocdb and defines the sequences associated
+    with the gene products.
     '''
-    basename = term_tables_basename(release)
+    basename = tables_basename(release, dataset)
     return os.path.join(root, basename)
 
+
+########################
+# GENE ONTOLOGY DATABASE
 
 class GeneOntology(object):
     '''
@@ -187,42 +222,43 @@ class GeneOntology(object):
 ############
 # Deprecated
 
-
-def term_table_file(root, release):
+def term_tables_dir(root=None, release=None):
     '''
-    Return the path to the term.txt file of the release.
-    e.g. './data/geneontology/go_201206-termdb-tables/term.txt'
+    Return the directory in which the release should be installed under root.
+    This is useful for getting the dir for creating a GeneOntology object.
+    e.g. '/path/to/root/go_201206-termdb-tables'
     '''
-    return os.path.join(term_tables_dir(root, release), 'term.txt')
+    root = os.path.abspath(root) if root is not None else os.getcwd()
+    release = release or guess_latest_release()
+    tarfile = term_tables_file(root, release)
+    return tarfile[:-7] # remove '.tar.gz'
 
 
-def download(root='.', release=None):
+def term_tables_basename(release):
     '''
-    Download go termdb tables.
-
-    root: dir under which to save downloaded files.
-    release: if None, the lastest release will be downloaded.
+    e.g. 'go_201206-termdb-tables.tar.gz'
     '''
-    release = release if release else guess_latest_release()
-    url = term_tables_url(release)
-    dest = term_tables_file(root, release)
-
-    if not os.path.exists(os.path.dirname(dest)):
-        os.makedirs(os.path.dirname(dest), DIR_MODE)
-    print 'downloading {} to {}...'.format(url, dest)
-    cmd = ['curl', '--remote-time', '--output', dest, url]
-    subprocess.check_call(cmd)
-    return dest
+    year, month, day = release.split('-')
+    basename = 'go_{}-termdb-tables.tar.gz'.format(year + month)
+    assert basename.endswith('.tar.gz')
+    return basename
 
 
-def process(root='.', release=None):
-    release = release if release else guess_latest_release()
-    path = term_tables_file(root, release)
-    print 'processing', path
-    if path.endswith('.tar.gz'):
-        print '...tar xzf file'
-        subprocess.check_call(['tar', '-xzf', os.path.basename(path)],
-                              cwd=os.path.dirname(path))
+def term_tables_url(release):
+    '''
+    e.g. 'ftp://ftp.geneontology.org/pub/go/godatabase/archive/full/2012-06-01/go_201206-termdb-tables.tar.gz'
+    '''
+    basename = term_tables_basename(release)
+    url_root = 'ftp://ftp.geneontology.org/pub/go/godatabase/archive'
+    return url_root + '/' + 'full/{}/{}'.format(release, basename)
+
+
+def term_tables_file(root, release):
+    '''
+    e.g. '/path/to/root/go_201206-termdb-tables.tar.gz'
+    '''
+    basename = term_tables_basename(release)
+    return os.path.join(root, basename)
 
 
 

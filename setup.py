@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = 'tfd',
-    version = '0.2.1',
+    version = '0.2.2',
     license = 'MIT',
     description = 'Random modules in a personal namespace.',
     long_description = open(os.path.join(os.path.dirname(__file__), 
