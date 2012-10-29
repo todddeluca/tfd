@@ -28,6 +28,36 @@ def coroutine(func):
     return start
 
 
+######################
+# WORKING WITH NUMBERS
+
+def isInteger(num):
+    '''
+    num: a thingy, e.g. string or number
+    Tests if num represents an integer.  What is an integer?  In this case it
+    is a thingy which can be converted to an integer and a float and when done
+    so the two values are equal.
+    Returns true if successful, false otherwise
+    '''
+    try:
+        int(num)
+        return int(num) == float(num)
+    except (TypeError, ValueError):
+        return False
+
+
+def isNumber(num):
+    '''
+    num: possibly a number
+    Attempts to convert num to a number.
+    Returns true if successful, false otherwise
+    '''
+    try:
+        float(num)
+        return True
+    except (TypeError, ValueError):
+        return False
+
 def humanBytes(num):
     '''
     http://blogmag.net/blog/read/38/Print_human_readable_file_size
@@ -40,6 +70,27 @@ def humanBytes(num):
             return "%3.1f%s" % (num, x)
         num /= 1024.0
 
+
+def normsci(x): 
+    '''
+    Returns a tuple of the significand (i.e. mantissa) and exponent of `x` in
+    base 10 in normalized scientific notation, a x 10**b, where 1 <= a < 10.
+    See http://en.wikipedia.org/wiki/Scientific_notation#Normalized_notation.
+    E.g. frexp10(897) -> (8.97, 2)
+    E.g. frexp10(0.00897) -> (8.97, -3)
+    Inspired by http://www.gossamer-threads.com/lists/python/python/867117
+    '''
+    # Implementation notes
+    # log10(0.1) -> -1.0
+    # log10(0.5) -> -0.3010299956639812 (need to round down)
+    # log10(1.5) -> 0.17609125905568124 (need to round down)
+    # log10(10) -> 1.0
+    exp = int(math.floor(math.log10(x)))
+    # make x a float so division works properly in python2
+    return float(x) / 10**exp, exp 
+
+
+############################
 
 def run(args, stdin=None, shell=False):
     '''
@@ -359,33 +410,6 @@ def splitIntoN(input, n, exact=False):
         end = end + size
 
 
-def isInteger(num):
-    '''
-    num: a thingy, e.g. string or number
-    Tests if num represents an integer.  What is an integer?  In this case it
-    is a thingy which can be converted to an integer and a float and when done
-    so the two values are equal.
-    Returns true if successful, false otherwise
-    '''
-    try:
-        int(num)
-        return int(num) == float(num)
-    except (TypeError, ValueError):
-        return False
-
-    
-def isNumber(num):
-    '''
-    num: possibly a number
-    Attempts to convert num to a number.
-    Returns true if successful, false otherwise
-    '''
-    try:
-        float(num)
-        return True
-    except (TypeError, ValueError):
-        return False
-    
 
 def makeCounter(n=0, i=1):
     '''
@@ -413,6 +437,23 @@ def any(pred, seq):
     for x in seq:
         if pred(x): return True
     return False
+
+
+def union(*iterables):
+    '''
+    Return a set which is the union of all the items in all the iterables.
+    '''
+    return set(item for it in iterables for item in it)
+
+
+def intersection(*iterables):
+    '''
+    Return a set of the intersection of all the items in all the iterables.
+    '''
+    if len(iterables) == 1:
+        return set(iterables[0])
+    else:
+        return set(iterables[0]).intersection(*iterables[1:])
 
 
 ########################
