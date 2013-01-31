@@ -4,6 +4,7 @@ Utilities to assist with logging in python
 '''
 
 import logging
+import os
 
 
 class ConcurrentFileHandler(logging.Handler):
