@@ -81,6 +81,7 @@ def connect_and_login(url, ftp=None):
             yield ftp
         except:
             ftp.quit()
+            raise
 
 
 
@@ -130,6 +131,30 @@ def walk(url, depth=-1, conn=None, pause=0):
                                 pause=pause):
                 yield retval
 
+
+def isdir(url, conn=None):
+    '''
+    Return True or False depending on whether or not the path component of the
+    url refers to a directory (as determined by CWD <path>) on the ftp server
+    the url refers to.
+    '''
+    # get path from url
+    scheme, netloc, path, query, fragment = urlparse.urlsplit(url)
+
+    with connect_and_login(url, ftp=conn) as ftp:
+        try:
+            ftp.cwd(path)
+            return True
+        except ftplib.error_perm as e:
+            # http://cr.yp.to/ftp/cwd.html
+            # "The server may reject a CWD request using code 550.  Most
+            # servers reject CWD requests unless the pathname refers to an
+            # accessible directory."
+            msg = str(e).strip()
+            if msg.startswith('550'):
+                return False
+            else:
+                raise
 
 def listdir(url, conn=None):
     '''
