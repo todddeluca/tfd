@@ -75,7 +75,8 @@ def doTransaction(conn, start=True, startSQL='START TRANSACTION'):
             executeSQL(conn, startSQL)
         yield conn
     except:
-        conn.rollback()
+        if conn is not None:
+            conn.rollback()
         raise
     else:
         conn.commit()
