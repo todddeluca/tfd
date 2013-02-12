@@ -30,7 +30,9 @@ def coroutine(func):
 
 def which(program):
     '''
-    Emulate unix 'which' command.
+    In python3.3, see shutil.which().  Emulate unix 'which' command.  If program
+    contains any directories (e.g. './foo'), return program, else if program is
+    found on the PATH, return the absolute path to it, otherwise return None.
     http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python/377028#377028
     '''
     def is_exe(fpath):
@@ -267,7 +269,6 @@ def retryErrorExecute(operation, args=[], keywords={}, pred=truePred, numTries=1
     predicate returns true, retry the operation if there are any tries left.  Otherwise, raise the exception.  
     '''
     # could make backoff a function, so delay = backoff(delay), for more flexibility than just an exponential relationship.
-    error = None
     for i in xrange(numTries):
         try:
             return operation(*args, **keywords)
